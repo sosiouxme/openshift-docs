@@ -254,6 +254,12 @@ Enabling aggregated logging to *Elasticsearch* involves:
 . link:#creating-logging-pods[Creating logging pods]
 . link:#creating-the-kibana-service[Creating the *Kibana* service]
 
+NOTE:
+-----
+The following directions assume everything is being created in the `default` project,
+but should work for arbitrary projects with minor adjustments.
+-----
+
 [[creating-an-elasticsearch-cluster]]
 
 === Creating an Elasticsearch cluster
@@ -264,7 +270,42 @@ link:../architecture/core_concepts/deployments.html#replication-controllers[repl
 controller], so you can link:../dev_guide/deployments.html#scaling[scale] the
 *Elasticsearch* cluster up and down as required.
 
-The following is the manifest for the *Elasticsearch* cluster:
+You'll need a privileged service account to launch the current ElasticSearch image,
+as it runs as root (which should be corrected in time). Create a file with these contents:
+
+
+====
+
+[source,yaml]
+----
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: es-deploy
+----
+
+====
+
+Save this to a file and create it:
+
+====
+----
+$ oc create -f path/to/serviceaccount.yaml
+----
+====
+
+You should then add this service account to the user list in the privileged
+SCC. Of course, this must be done using cluster-administrator credentials.
+
+    $ oc edit scc/privileged
+
+Add this to the `users` hash at the end (`default` is the project name):
+
+    - system:serviceaccount:default:es-deploy
+
+Then save and exit. This account now has access to deploy privileged pods.
+
+The following is the manifest for the *ElasticSearch* cluster:
 
 ====
 
@@ -325,8 +366,11 @@ items:
           provider: "fabric8"
           component: "elasticsearch"
       spec:
+        serviceAccount: es-deploy
         containers:
           -
+            securityContext:
+              runAsUser: 0
             env:
             -
               name: "KUBERNETES_TRUST_CERT"
@@ -409,6 +453,11 @@ spec:
     - name: varlibdockercontainers
       mountPath: /var/lib/docker/containers
       readOnly: true
+    env:
+    - name: "ES_HOST"
+      value: "es-logging"
+    - name: "ES_PORT"
+      value: "9200"
   volumes:
   - name: varlog
     hostPath:
