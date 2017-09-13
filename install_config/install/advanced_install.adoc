@@ -2170,102 +2170,68 @@ ifdef::openshift-origin[]
 *openshift/origin-ansible*
 endif::[]
 image is a containerized version of the {product-title} installer that runs as a
-link:https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html/managing_containers/running_system_containers[system container]. System containers are stored and run outside of the traditional
-*docker* service. Functionally, using the containerized installer is the same as
-using the traditional RPM-based installer, except it is running in a
-containerized environment instead of directly on the host.
+link:https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html/managing_containers/running_system_containers[system container].
+System containers are stored and run outside of the traditional
+*docker* service. The installer image provides the same functionality
+as the traditional RPM-based installer, but it runs in a containerized
+environment that provides all of its dependencies rather than being
+installed directly on the host.
 
-. Use the Docker CLI to pull the image locally:
+. As the `root` user, use the Atomic CLI to run the installer as a run-once system container:
 +
 ----
-ifdef::openshift-enterprise[]
-$ docker pull registry.access.redhat.com/openshift3/ose-ansible:v3.6
-endif::[]
-ifdef::openshift-origin[]
-$ docker pull docker.io/openshift/origin-ansible:v3.6
-endif::[]
-----
-
-. The installer system container must be stored in
-link:https://access.redhat.com/documentation/en-us/red_hat_satellite/6.2/html/content_management_guide/managing_ostree_content[OSTree]
-instead of defaulting to *docker* daemon storage. Use the Atomic CLI to import
-the installer image from the local *docker* engine to OSTree storage:
-+
-----
-$ atomic pull --storage ostree \
-ifdef::openshift-enterprise[]
-    docker:registry.access.redhat.com/openshift3/ose-ansible:v3.6
-endif::[]
-ifdef::openshift-origin[]
-    docker:docker.io/openshift/origin-ansible:v3.6
-endif::[]
-----
-
-. Install the system container so it is set up as a systemd service:
-+
-----
-$ atomic install --system \
+# atomic install --system \
     --storage=ostree \
-    --name=openshift-installer \//<1>
-    --set INVENTORY_FILE=/path/to/inventory \//<2>
+    --set INVENTORY_FILE=/path/to/inventory \//<1>
 ifdef::openshift-enterprise[]
-    docker:registry.access.redhat.com/openshift3/ose-ansible:v3.6
+    registry.access.redhat.com/openshift3/ose-ansible:v3.6
 endif::[]
 ifdef::openshift-origin[]
-    docker:docker.io/openshift/origin-ansible:v3.6
+    docker.io/openshift/origin-ansible:v3.6
 endif::[]
 ----
-<1> Sets the name for the systemd service.
-<2> Specify the location for your inventory file on your local workstation.
-
-. Use the `systemctl` command to start the installer service as you would any
-other systemd service. This command initiates the cluster installation:
+<1> Specify the location on the local host for your inventory file.
 +
-----
-$ systemctl start openshift-installer
-----
+This command initiates the cluster installation using the inventory file specified and the `root` user's
+SSH configuration, logging to the terminal as well as *_/var/log/ansible.log_*. The first time this is executed, the image is imported into
+link:https://access.redhat.com/documentation/en-us/red_hat_satellite/6.2/html/content_management_guide/managing_ostree_content[OSTree]
+storage (system containers use this instead of *docker* daemon storage).
+Later executions re-use the stored image.
 +
 If for any reason the installation fails, before re-running the installer, see
 xref:installer-known-issues[Known Issues] to check for any specific instructions
 or workarounds.
 
-. After the installation completes, you can uninstall the system container if you want. However, if you need to run the installer again to run any other playbooks later, you would have to follow this procedure again.
-+
-To uninstall the system container:
-+
-----
-$ atomic uninstall openshift-installer
-----
-
 [[running-the-advanced-installation-system-container-other-playbooks]]
 ==== Running Other Playbooks
 
-After you have completed the cluster installation, if you want to later run any
-other playbooks using the containerized installer (for example, cluster upgrade
-playbooks), you can use the `PLAYBOOK_FILE` environment variable. The default
-value is `playbooks/byo/config.yml`, which is the main cluster installation
-playbook, but you can set it to the path of another playbook inside the
-container.
+To run any other playbooks (for example, to run the
+xref:configuring-cluster-pre-install-checks[pre-install checks]
+before proceeding to install) using the containerized installer, you can
+specify a playbook with the `PLAYBOOK_FILE` environment variable. The
+default value is *_/usr/share/ansible/openshift-ansible/playbooks/byo/config.yml_*, which is the main cluster
+installation playbook, but you can set it to the path of another playbook
+inside the container.
 
 For example:
 
 ----
-$ atomic install --system \
+# atomic install --system \
     --storage=ostree \
-    --name=openshift-installer \
-    --set INVENTORY_FILE=/etc/ansible/hosts \
-    --set PLAYBOOK_FILE=playbooks/byo/openshift-cluster/upgrades/v3_6/upgrade.yml \//<1>
+    --set INVENTORY_FILE=/path/to/inventory \
+    --set PLAYBOOK_FILE=/usr/share/ansible/openshift-ansible/playbooks/byo/openshift-checks/pre-install.yml \//<1>
+    --set OPTS="-v" \//<2>
 ifdef::openshift-enterprise[]
-    docker:registry.access.redhat.com/openshift3/ose-ansible:v3.6
+    registry.access.redhat.com/openshift3/ose-ansible:v3.6
 endif::[]
 ifdef::openshift-origin[]
-    docker:docker.io/openshift/origin-ansible:v3.6
+    docker.io/openshift/origin-ansible:v3.6
 endif::[]
 ----
-<1> Set `PLAYBOOK_FILE` to the relative path of the playbook starting at the
-*_playbooks/_* directory. Playbooks mentioned elsewhere in {product-title}
-documentation assume use of the RPM-based installer, so use this relative path
-instead when using the containerized installer.
+<1> Set `PLAYBOOK_FILE` to the full path of the playbook starting at the
+*_playbooks/_* directory. Playbooks are located in the same locations as with
+the RPM-based installer.
+<2> Set `OPTS` to add command line options to `ansible-playbook`.
 
 [[running-the-advanced-installation-tsb]]
 === Deploying the Template Service Broker
