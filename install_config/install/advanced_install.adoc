@@ -2237,8 +2237,9 @@ as a volume under *_/opt/app-root/src/.ssh_*.
 variable, and typically refers to a playbook from the *openshift-ansible*
 RPM, but can be any playbook available inside the container.
 
-* Here is an example of how to run an install via *docker*. Note that
-this must be run by a non-`root` user with access to *docker*.
+Here is an example of how to run an install via *docker*.
+
+* Note that this must be run by a non-`root` user with access to *docker*.
 +
 ----
 $ docker run -t -u `id -u` \
