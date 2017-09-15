@@ -2157,10 +2157,8 @@ If for any reason the installation fails, before re-running the installer, see
 xref:installer-known-issues[Known Issues] to check for any specific
 instructions or workarounds.
 
-[[running-the-advanced-installation-system-container]]
+[[running-the-advanced-installation-containerized]]
 === Running the Containerized Installer
-
-include::install_config/install/advanced_install.adoc[tag=syscontainers_techpreview]
 
 The
 ifdef::openshift-enterprise[]
@@ -2169,13 +2167,22 @@ endif::[]
 ifdef::openshift-origin[]
 *openshift/origin-ansible*
 endif::[]
-image is a containerized version of the {product-title} installer that runs as a
+image is a containerized version of the {product-title} installer.
+This installer image provides the same functionality as the RPM-based
+installer, but it runs in a containerized environment that provides all
+of its dependencies rather than being installed directly on the host.
+So, the only requirement to use it is the ability to run a container.
+
+[[running-the-advanced-installation-system-container]]
+==== Running the Installer as a System Container
+
+include::install_config/install/advanced_install.adoc[tag=syscontainers_techpreview]
+
+The installer image can be used as a
 link:https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html/managing_containers/running_system_containers[system container].
-System containers are stored and run outside of the traditional
-*docker* service. The installer image provides the same functionality
-as the traditional RPM-based installer, but it runs in a containerized
-environment that provides all of its dependencies rather than being
-installed directly on the host.
+System containers are stored and run outside of the traditional *docker* service.
+This enables running the installer image from one of the target hosts without
+concern for the install restarting *docker* on the host.
 
 . As the `root` user, use the Atomic CLI to run the installer as a run-once system container:
 +
@@ -2201,6 +2208,101 @@ Later executions re-use the stored image.
 If for any reason the installation fails, before re-running the installer, see
 xref:installer-known-issues[Known Issues] to check for any specific instructions
 or workarounds.
+
+[[running-the-advanced-installation-docker]]
+==== Running the Installer as a Docker Container
+
+The installer image can also run as a *docker* container anywhere that *docker* can run.
+However, this method should not be used to run the installer on one of the target hosts,
+as the install typically restarts *docker* on the host, which would disrupt installer
+container execution.
+
+[NOTE]
+====
+Although this method and the system container method above use the same image, they
+run with different entry points and contexts, so runtime parameters are not the same.
+====
+
+At a minimum, when running the installer as a *docker* container you must provide:
+
+. An inventory. This can be a location inside the container (typically
+mounted with a volume) with a path referenced via the `INVENTORY_FILE`
+environment variable. Alternatively you can serve the inventory file from
+a web server and use the `INVENTORY_URL` environment variable to fetch
+it, or `DYNAMIC_SCRIPT_URL` to download an executable script that provides
+a dynamic inventory.
+. SSH keys so that Ansible can reach your hosts. These should be mounted
+as a volume under *_/opt/app-root/src/.ssh_*.
+. The playbook to run. This is set using the `PLAYBOOK_FILE` environment
+variable, and typically refers to a playbook from the *openshift-ansible*
+RPM, but can be any playbook available inside the container.
+
+* Here is an example of how to run an install via *docker*. Note that
+this must be run by a non-`root` user with access to *docker*.
++
+----
+$ docker run -t -u `id -u` \
+       -v $HOME/.ssh/id_rsa:/opt/app-root/src/.ssh/id_rsa:Z \//<1>
+       -v $HOME/ansible/hosts:/tmp/inventory:Z \//<2>
+       -e INVENTORY_FILE=/tmp/inventory \
+       -e PLAYBOOK_FILE=playbooks/byo/config.yml \//<3>
+       -e OPTS="-v" \
+       openshift/origin-ansible
+----
+<1> This mounts an SSH key that provides access to the target hosts. In
+this example, the user's own default SSH key is used.
+<2> This mounts in an inventory file (in this example, from the user's
+home directory) for *Ansible* to use. On the next line `INVENTORY_FILE`
+is set to the location where it is mounted.
+<3> This `PLAYBOOK_FILE` specifies the standard BYO installer.
+
+Here is a detailed explanation of the options used in the command above:
+
+* `-t` allocates a TTY so that *Ansible* adds color to the output.
+
+* `-u \`id -u\`` makes the container run with the same UID as the current
+user, which allows that user to use the SSH key inside the container (SSH
+private keys are expected to be readable only by their owner).
+
+* `-v $HOME/.ssh/id_rsa:/opt/app-root/src/.ssh/id_rsa:Z` mounts your
+SSH key (`$HOME/.ssh/id_rsa`) under the container user's `$HOME/.ssh`
+(*_/opt/app-root/src_* is the `$HOME` of the user in the container). If
+you mount the SSH key into a non-standard location you can add an
+environment variable with `-e ANSIBLE_PRIVATE_KEY_FILE=/the/mount/point`
+or set `ansible_ssh_private_key_file=/the/mount/point` as a variable in
+the inventory to point *Ansible* at it.
++
+Note that the SSH key is mounted with the `:Z` flag: this
+is required so that the container can read the SSH key
+under its restricted SELinux context; this also means that
+your original SSH key file will be re-labeled to something like
+`system_u:object_r:container_file_t:s0:c113,c247`. For more details about
+`:Z` please check the `docker-run(1)` man page. Please keep this in
+mind when providing these volume mount specifications because this could
+have unexpected consequences: for example, if you mount (and therefore
+re-label) your whole `$HOME/.ssh` directory it will block the host's
+*sshd* from accessing your public keys to login. For this reason you
+may want to use a separate copy of the SSH key (or directory), so that
+the original file labels remain untouched.
+
+* `-v $HOME/ansible/hosts:/tmp/inventory:Z` and `-e INVENTORY_FILE=/tmp/inventory`
+mount the *Ansible* inventory file into the container as
+*_/tmp/inventory_* and set the corresponding environment variable to
+point at it. As with the SSH key, the inventory file SELinux labels may
+need to be relabeled via the `:Z` flag to allow reading in the container,
+depending on the existing label (for files in a user `$HOME` directory
+this is likely to be needed). So again you may prefer to copy the
+inventory to a dedicated location before mounting it.
+
+* `-e PLAYBOOK_FILE=playbooks/byo/config.yml` specifies the playbook
+to run (in this example, the BYO installer) as a relative path from the
+top level directory of openshift-ansible content. The full path from the
+RPM can also be used, as well as the path to any other playbook file in
+the container.
+
+* `-e OPTS="-v"` supplies arbitrary command line options (in this case,
+`-v` to increase verbosity) to the `ansible-playbook` command that runs
+inside the container.
 
 [[running-the-advanced-installation-system-container-other-playbooks]]
 ==== Running Other Playbooks
