@@ -2244,9 +2244,13 @@ the RPM-based installer.
 ==== Running the Installer as a Docker Container
 
 The installer image can also run as a *docker* container anywhere that *docker* can run.
-However, this method should not be used to run the installer on one of the target hosts,
-as the install typically restarts *docker* on the host, which would disrupt installer
-container execution.
+
+[WARNING]
+====
+This method should not be used to run the installer on one of the hosts being configured,
+as the install typically restarts *docker* on the host, which would disrupt the installer
+container's own execution.
+====
 
 [NOTE]
 ====
