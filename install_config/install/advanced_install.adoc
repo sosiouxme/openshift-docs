@@ -2280,8 +2280,6 @@ endif::[]
 
 The following is a detailed explanation of the options used in the command above.
 
-* `-t` causes *docker* to allocate a TTY so that Ansible adds color to the output.
-
 * `-u `id -u`` makes the container run with the same UID as the current
 user, which allows that user to use the SSH key inside the container (SSH
 private keys are expected to be readable only by their owner).
@@ -2294,13 +2292,13 @@ environment variable with `-e ANSIBLE_PRIVATE_KEY_FILE=/the/mount/point`
 or set `ansible_ssh_private_key_file=/the/mount/point` as a variable in
 the inventory to point Ansible at it.
 +
-Note that the SSH key is mounted with the `:Z` flag: this
-is required so that the container can read the SSH key
-under its restricted SELinux context; this also means that
-your original SSH key file will be re-labeled to something like
-`system_u:object_r:container_file_t:s0:c113,c247`. For more details about
-`:Z` please check the `docker-run(1)` man page. Please keep this in
-mind when providing these volume mount specifications because this could
+Note that the SSH key is mounted with the `:Z` flag: this is
+required so that the container can read the SSH key under
+its restricted SELinux context; this also means that your
+original SSH key file will be re-labeled to something like
+`system_u:object_r:container_file_t:s0:c113,c247`. For more details
+about `:Z` please check the `docker-run(1)` man page. Keep this in mind
+when providing these volume mount specifications because this could
 have unexpected consequences: for example, if you mount (and therefore
 re-label) your whole `$HOME/.ssh` directory it will block the host's
 *sshd* from accessing your public keys to login. For this reason you
