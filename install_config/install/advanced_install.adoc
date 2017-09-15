@@ -2225,34 +2225,29 @@ run with different entry points and contexts, so runtime parameters are not the 
 
 At a minimum, when running the installer as a *docker* container you must provide:
 
-. An inventory. This can be a location inside the container (typically
-mounted with a volume) with a path referenced via the `INVENTORY_FILE`
-environment variable. Alternatively you can serve the inventory file from
-a web server and use the `INVENTORY_URL` environment variable to fetch
-it, or `DYNAMIC_SCRIPT_URL` to download an executable script that provides
-a dynamic inventory.
-
-. SSH keys so that Ansible can reach your hosts. These should be mounted
-as a volume under *_/opt/app-root/src/.ssh_*.
-
-. The playbook to run. This is set using the `PLAYBOOK_FILE` environment
-variable, and typically refers to a playbook from the *openshift-ansible*
-RPM, but can be any playbook available inside the container.
+* SSH keys so that Ansible can reach your hosts.
+* An Ansible inventory file.
+* The Ansible playbook to run against that inventory.
 
 Here is an example of how to run an install via *docker*.
 Note that this must be run by a non-`root` user with access to *docker*.
 
 ----
 $ docker run -t -u `id -u` \
-       -v $HOME/.ssh/id_rsa:/opt/app-root/src/.ssh/id_rsa:Z \
-       -v $HOME/ansible/hosts:/tmp/inventory:Z \
-       -e INVENTORY_FILE=/tmp/inventory \
-       -e PLAYBOOK_FILE=playbooks/byo/config.yml \
-       -e OPTS="-v" \
-       openshift/origin-ansible
+    -v $HOME/.ssh/id_rsa:/opt/app-root/src/.ssh/id_rsa:Z \
+    -v $HOME/ansible/hosts:/tmp/inventory:Z \
+    -e INVENTORY_FILE=/tmp/inventory \
+    -e PLAYBOOK_FILE=playbooks/byo/config.yml \
+    -e OPTS="-v" \
+ifdef::openshift-enterprise[]
+    registry.access.redhat.com/openshift3/ose-ansible:v3.6
+endif::[]
+ifdef::openshift-origin[]
+    docker.io/openshift/origin-ansible:v3.6
+endif::[]
 ----
 
-A detailed explanation of the options used in the command above follows.
+The following is a detailed explanation of the options used in the command above.
 
 * `-t` allocates a TTY so that *Ansible* adds color to the output.
 
@@ -2282,17 +2277,22 @@ may want to use a separate copy of the SSH key (or directory), so that
 the original file labels remain untouched.
 
 * `-v $HOME/ansible/hosts:/tmp/inventory:Z` and `-e INVENTORY_FILE=/tmp/inventory`
-mount the *Ansible* inventory file into the container as
+mount a static *Ansible* inventory file into the container as
 *_/tmp/inventory_* and set the corresponding environment variable to
 point at it. As with the SSH key, the inventory file SELinux labels may
 need to be relabeled via the `:Z` flag to allow reading in the container,
 depending on the existing label (for files in a user `$HOME` directory
 this is likely to be needed). So again you may prefer to copy the
 inventory to a dedicated location before mounting it.
++
+The inventory file can also be downloaded from a web server if you specify
+the `INVENTORY_URL` environment variable, or generated dynamically using
+`DYNAMIC_SCRIPT_URL` to specify an executable script that provides a
+dynamic inventory.
 
 * `-e PLAYBOOK_FILE=playbooks/byo/config.yml` specifies the playbook
 to run (in this example, the BYO installer) as a relative path from the
-top level directory of openshift-ansible content. The full path from the
+top level directory of *openshift-ansible* content. The full path from the
 RPM can also be used, as well as the path to any other playbook file in
 the container.
 
