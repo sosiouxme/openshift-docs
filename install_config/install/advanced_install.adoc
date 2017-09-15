@@ -2256,7 +2256,7 @@ A detailed explanation of the options used in the command above follows.
 
 * `-t` allocates a TTY so that *Ansible* adds color to the output.
 
-* `-u \`id -u\`` makes the container run with the same UID as the current
+* `-u `id -u`` makes the container run with the same UID as the current
 user, which allows that user to use the SSH key inside the container (SSH
 private keys are expected to be readable only by their owner).
 
